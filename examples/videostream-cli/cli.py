@@ -89,7 +89,7 @@ async def run(pc, player, recorder, signaling, role):
 
     @pc.on("track")
     def on_track(track):
-        print("Receiving %s" % track.kind)
+        print(f"Receiving {track.kind}")
         recorder.addTrack(track)
 
     # connect signaling
@@ -138,11 +138,7 @@ if __name__ == "__main__":
     pc = RTCPeerConnection()
 
     # create media source
-    if args.play_from:
-        player = MediaPlayer(args.play_from)
-    else:
-        player = None
-
+    player = MediaPlayer(args.play_from) if args.play_from else None
     # create media sink
     if args.record_to:
         recorder = MediaRecorder(args.record_to)

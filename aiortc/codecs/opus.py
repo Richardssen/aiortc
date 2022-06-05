@@ -96,4 +96,4 @@ class OpusEncoder(Encoder):
         )
         assert length > 0
 
-        return [self.buffer[0:length]], timestamp
+        return [self.buffer[:length]], timestamp

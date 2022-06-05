@@ -389,7 +389,7 @@ class InterArrivalTest(TestCase):
         timestamp += TRIGGER_NEW_GROUP_US
         arrival_time += BURST_THRESHOLD_MS + 1
         self.assertNotComputed(timestamp, 28, 2)
-        for i in range(10):
+        for _ in range(10):
             timestamp += MIN_STEP_US
             arrival_time += BURST_THRESHOLD_MS + 1
             self.assertNotComputed(timestamp, arrival_time, 1)
@@ -420,7 +420,7 @@ class InterArrivalTest(TestCase):
         timestamp += TRIGGER_NEW_GROUP_US
         arrival_time += 11
         self.assertNotComputed(timestamp, 28, 2)
-        for i in range(10):
+        for _ in range(10):
             timestamp += MIN_STEP_US
             arrival_time += BURST_THRESHOLD_MS + 1
             self.assertNotComputed(timestamp, arrival_time, 1)
@@ -457,7 +457,7 @@ class InterArrivalTest(TestCase):
         self.assertNotComputed(timestamp, 28, 2)
         timestamp += 10 * MIN_STEP_US
         g2_timestamp = timestamp
-        for i in range(10):
+        for _ in range(10):
             arrival_time += BURST_THRESHOLD_MS + 1
             self.assertNotComputed(timestamp, arrival_time, 1)
             timestamp -= MIN_STEP_US
@@ -490,7 +490,7 @@ class InterArrivalTest(TestCase):
         # G2
         timestamp += TRIGGER_NEW_GROUP_US
         arrival_time = 100
-        for i in range(10):
+        for _ in range(10):
             timestamp += 30000
             arrival_time += BURST_THRESHOLD_MS
             self.assertNotComputed(timestamp, arrival_time, 1)
@@ -566,7 +566,7 @@ class OveruseDetectorTest(TestCase):
     def test_simple_non_overuse_30fps(self):
         frame_duration_ms = 33
 
-        for i in range(1000):
+        for _ in range(1000):
             self.update_detector(self.rtp_timestamp, self.now_ms)
             self.now_ms += frame_duration_ms
             self.rtp_timestamp += frame_duration_ms * 90
@@ -578,10 +578,7 @@ class OveruseDetectorTest(TestCase):
         for i in range(1000):
             self.update_detector(self.rtp_timestamp, self.now_ms)
             self.rtp_timestamp += frame_duration_ms * 90
-            if i % 2:
-                self.now_ms += frame_duration_ms - 5
-            else:
-                self.now_ms += frame_duration_ms + 5
+            self.now_ms += frame_duration_ms - 5 if i % 2 else frame_duration_ms + 5
             self.assertEqual(self.detector.state(), BandwidthUsage.NORMAL)
 
     def test_simple_non_overuse_with_rtp_timestamp_variance(self):
@@ -636,7 +633,7 @@ class OveruseDetectorTest(TestCase):
 
         # run 1000 samples to reach steady state
         for i in range(1000):
-            for j in range(6):
+            for _ in range(6):
                 self.update_detector(self.rtp_timestamp, self.now_ms)
             self.rtp_timestamp += frame_duration_ms * 90
             if i % 2:
@@ -647,8 +644,8 @@ class OveruseDetectorTest(TestCase):
             self.assertEqual(self.detector.state(), BandwidthUsage.NORMAL)
 
         # simulate a higher send pace, that is too high.
-        for i in range(3):
-            for j in range(6):
+        for _ in range(3):
+            for _ in range(6):
                 self.update_detector(self.rtp_timestamp, self.now_ms)
             self.now_ms += frame_duration_ms + drift_per_frame_ms * 6
             self.rtp_timestamp += frame_duration_ms * 90
@@ -694,7 +691,7 @@ class OveruseDetectorTest(TestCase):
         last_overuse = -1
 
         for i in range(100000):
-            for j in range(packets_per_frame):
+            for _ in range(packets_per_frame):
                 self.update_detector(self.rtp_timestamp, self.receive_time_ms)
             self.rtp_timestamp += mean_ms * 90
             self.now_ms += mean_ms
@@ -714,7 +711,7 @@ class OveruseDetectorTest(TestCase):
         self, packets_per_frame, mean_ms, standard_deviation_ms, drift_per_frame_ms
     ):
         for i in range(100000):
-            for j in range(packets_per_frame):
+            for _ in range(packets_per_frame):
                 self.update_detector(self.rtp_timestamp, self.receive_time_ms)
             self.rtp_timestamp += mean_ms * 90
             self.now_ms += mean_ms + drift_per_frame_ms
@@ -932,7 +929,7 @@ class Stream:
         self.arrival_time_us = 0
 
     def generate_frames(self, count):
-        for i in range(count):
+        for _ in range(count):
             abs_send_time = self.send_time_us * (1 << 18) // 1000000
             self.arrival_time_us = max(self.arrival_time_us, self.send_time_us) + round(
                 (self.payload_size * 8000000) / self.capacity

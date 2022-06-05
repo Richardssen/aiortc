@@ -34,11 +34,12 @@ def object_to_string(obj):
         message = {"sdp": obj.sdp, "type": obj.type}
     elif isinstance(obj, RTCIceCandidate):
         message = {
-            "candidate": "candidate:" + candidate_to_sdp(obj),
+            "candidate": f"candidate:{candidate_to_sdp(obj)}",
             "id": obj.sdpMid,
             "label": obj.sdpMLineIndex,
             "type": "candidate",
         }
+
     else:
         message = {"type": "bye"}
     return json.dumps(message, sort_keys=True)
@@ -52,7 +53,7 @@ class ApprtcSignaling:
         self._websocket = None
 
     async def connect(self):
-        join_url = self._origin + "/join/" + self._room
+        join_url = f"{self._origin}/join/{self._room}"
 
         # fetch room parameters
         self._http = aiohttp.ClientSession()
@@ -66,8 +67,9 @@ class ApprtcSignaling:
         self.__is_initiator = params["is_initiator"] == "true"
         self.__messages = params["messages"]
         self.__post_url = (
-            self._origin + "/message/" + self._room + "/" + params["client_id"]
+            f"{self._origin}/message/{self._room}/" + params["client_id"]
         )
+
 
         # connect to websocket
         self._websocket = await websockets.connect(
@@ -100,12 +102,12 @@ class ApprtcSignaling:
         else:
             message = await self._websocket.recv()
             message = json.loads(message)["msg"]
-        logger.info("< " + message)
+        logger.info(f"< {message}")
         return object_from_string(message)
 
     async def send(self, obj):
         message = object_to_string(obj)
-        logger.info("> " + message)
+        logger.info(f"> {message}")
         if self.__is_initiator:
             await self._http.post(self.__post_url, data=message)
         else:
@@ -287,9 +289,7 @@ def create_signaling(args):
         if aiohttp is None or websockets is None:  # pragma: no cover
             raise Exception("Please install aiohttp and websockets to use appr.tc")
         if not args.signaling_room:
-            args.signaling_room = "".join(
-                [random.choice("0123456789") for x in range(10)]
-            )
+            args.signaling_room = "".join([random.choice("0123456789") for _ in range(10)])
         return ApprtcSignaling(args.signaling_room)
     elif args.signaling == "tcp-socket":
         return TcpSocketSignaling(args.signaling_host, args.signaling_port)

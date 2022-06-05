@@ -116,9 +116,10 @@ class HeaderExtensionsMap:
             extensions.append(
                 (
                     self.__ids.transmission_offset,
-                    pack("!l", values.transmission_offset << 8)[0:2],
+                    pack("!l", values.transmission_offset << 8)[:2],
                 )
             )
+
         if values.audio_level is not None and self.__ids.audio_level:
             extensions.append(
                 (
@@ -152,10 +153,7 @@ def pack_packets_lost(count: int) -> bytes:
 
 
 def unpack_packets_lost(d: bytes) -> int:
-    if d[0] & 0x80:
-        d = b"\xff" + d
-    else:
-        d = b"\x00" + d
+    d = b"\xff" + d if d[0] & 0x80 else b"\x00" + d
     return unpack("!l", d)[0]
 
 
@@ -190,7 +188,7 @@ def unpack_remb_fci(data: bytes) -> Tuple[int, List[int]]:
 
     https://tools.ietf.org/html/draft-alvestrand-rmcat-remb-03
     """
-    if len(data) < 8 or data[0:4] != b"REMB":
+    if len(data) < 8 or data[:4] != b"REMB":
         raise ValueError("Invalid REMB prefix")
 
     exponent = (data[5] & 0xFC) >> 2
@@ -199,7 +197,7 @@ def unpack_remb_fci(data: bytes) -> Tuple[int, List[int]]:
 
     pos = 8
     ssrcs = []
-    for r in range(data[4]):
+    for _ in range(data[4]):
         ssrcs.append(unpack_from("!L", data, pos)[0])
         pos += 4
 
@@ -226,24 +224,7 @@ def unpack_header_extensions(
     extensions = []
     pos = 0
 
-    if extension_profile == 0xBEDE:
-        # One-Byte Header
-        while pos < len(extension_value):
-            # skip padding byte
-            if extension_value[pos] == 0:
-                pos += 1
-                continue
-
-            x_id = (extension_value[pos] & 0xF0) >> 4
-            x_length = (extension_value[pos] & 0x0F) + 1
-            pos += 1
-
-            if len(extension_value) < pos + x_length:
-                raise ValueError("RTP one-byte header extension value is truncated")
-            x_value = extension_value[pos : pos + x_length]
-            extensions.append((x_id, x_value))
-            pos += x_length
-    elif extension_profile == 0x1000:
+    if extension_profile == 0x1000:
         # Two-Byte Header
         while pos < len(extension_value):
             # skip padding byte
@@ -262,6 +243,23 @@ def unpack_header_extensions(
             extensions.append((x_id, x_value))
             pos += x_length
 
+    elif extension_profile == 0xBEDE:
+        # One-Byte Header
+        while pos < len(extension_value):
+            # skip padding byte
+            if extension_value[pos] == 0:
+                pos += 1
+                continue
+
+            x_id = (extension_value[pos] & 0xF0) >> 4
+            x_length = (extension_value[pos] & 0x0F) + 1
+            pos += 1
+
+            if len(extension_value) < pos + x_length:
+                raise ValueError("RTP one-byte header extension value is truncated")
+            x_value = extension_value[pos : pos + x_length]
+            extensions.append((x_id, x_value))
+            pos += x_length
     return extensions
 
 
@@ -283,10 +281,10 @@ def pack_header_extensions(extensions: List[Tuple[int, bytes]]) -> Tuple[int, by
         if x_id > 14 or x_length == 0 or x_length > 16:
             one_byte = False
 
+    extension_value = b""
     if one_byte:
         # One-Byte Header
         extension_profile = 0xBEDE
-        extension_value = b""
         for x_id, x_value in extensions:
             x_length = len(x_value)
             extension_value += pack("!B", (x_id << 4) | (x_length - 1))
@@ -294,7 +292,6 @@ def pack_header_extensions(extensions: List[Tuple[int, bytes]]) -> Tuple[int, by
     else:
         # Two-Byte Header
         extension_profile = 0x1000
-        extension_value = b""
         for x_id, x_value in extensions:
             x_length = len(x_value)
             extension_value += pack("!BB", x_id, x_length)
@@ -322,7 +319,7 @@ class RtcpReceiverInfo:
 
     @classmethod
     def parse(cls, data: bytes):
-        ssrc, fraction_lost = unpack("!LB", data[0:5])
+        ssrc, fraction_lost = unpack("!LB", data[:5])
         packets_lost = unpack_packets_lost(data[5:8])
         highest_sequence, jitter, lsr, dlsr = unpack("!LLLL", data[8:])
         return cls(
@@ -381,10 +378,7 @@ class RtcpByePacket:
     def parse(cls, data: bytes, count: int):
         if len(data) < 4 * count:
             raise ValueError("RTCP bye length is invalid")
-        if count > 0:
-            sources = list(unpack_from("!" + ("L" * count), data, 0))
-        else:
-            sources = []
+        sources = list(unpack_from("!" + ("L" * count), data, 0)) if count > 0 else []
         return cls(sources=sources)
 
 
@@ -408,7 +402,7 @@ class RtcpPsfbPacket:
         if len(data) < 8:
             raise ValueError("RTCP payload-specific feedback length is invalid")
 
-        ssrc, media_ssrc = unpack("!LL", data[0:8])
+        ssrc, media_ssrc = unpack("!LL", data[:8])
         fci = data[8:]
         return cls(fmt=fmt, ssrc=ssrc, media_ssrc=media_ssrc, fci=fci)
 
@@ -429,10 +423,10 @@ class RtcpRrPacket:
         if len(data) != 4 + 24 * count:
             raise ValueError("RTCP receiver report length is invalid")
 
-        ssrc = unpack("!L", data[0:4])[0]
+        ssrc = unpack("!L", data[:4])[0]
         pos = 4
         reports = []
-        for r in range(count):
+        for _ in range(count):
             reports.append(RtcpReceiverInfo.parse(data[pos : pos + 24]))
             pos += 24
         return cls(ssrc=ssrc, reports=reports)
@@ -472,14 +466,12 @@ class RtcpRtpfbPacket:
         if len(data) < 8 or len(data) % 4:
             raise ValueError("RTCP RTP feedback length is invalid")
 
-        ssrc, media_ssrc = unpack("!LL", data[0:8])
+        ssrc, media_ssrc = unpack("!LL", data[:8])
         lost = []
         for pos in range(8, len(data), 4):
             pid, blp = unpack("!HH", data[pos : pos + 4])
             lost.append(pid)
-            for d in range(0, 16):
-                if (blp >> d) & 1:
-                    lost.append(pid + d + 1)
+            lost.extend(pid + d + 1 for d in range(16) if (blp >> d) & 1)
         return cls(fmt=fmt, ssrc=ssrc, media_ssrc=media_ssrc, lost=lost)
 
 
@@ -502,7 +494,7 @@ class RtcpSdesPacket:
     def parse(cls, data: bytes, count: int):
         pos = 0
         chunks = []
-        for r in range(count):
+        for _ in range(count):
             if len(data) < pos + 4:
                 raise ValueError("RTCP SDES source is truncated")
             ssrc = unpack_from("!L", data, pos)[0]
@@ -547,7 +539,7 @@ class RtcpSrPacket:
         sender_info = RtcpSenderInfo.parse(data[4:24])
         pos = 24
         reports = []
-        for r in range(count):
+        for _ in range(count):
             reports.append(RtcpReceiverInfo.parse(data[pos : pos + 24]))
             pos += 24
         return RtcpSrPacket(ssrc=ssrc, sender_info=sender_info, reports=reports)
@@ -592,7 +584,7 @@ class RtcpPacket:
             if padding:
                 if not payload or not payload[-1] or payload[-1] > len(payload):
                     raise ValueError("RTCP packet padding length is invalid")
-                payload = payload[0 : -payload[-1]]
+                payload = payload[:-payload[-1]]
 
             if packet_type == RTCP_BYE:
                 packets.append(RtcpByePacket.parse(payload, count))
@@ -647,7 +639,7 @@ class RtpPacket:
                 "RTP packet length is less than %d bytes" % RTP_HEADER_LENGTH
             )
 
-        v_p_x_cc, m_pt, sequence_number, timestamp, ssrc = unpack("!BBHLL", data[0:12])
+        v_p_x_cc, m_pt, sequence_number, timestamp, ssrc = unpack("!BBHLL", data[:12])
         version = v_p_x_cc >> 6
         padding = (v_p_x_cc >> 5) & 1
         extension = (v_p_x_cc >> 4) & 1
@@ -666,7 +658,7 @@ class RtpPacket:
         )
 
         pos = RTP_HEADER_LENGTH
-        for i in range(0, cc):
+        for _ in range(cc):
             packet.csrc.append(unpack_from("!L", data, pos)[0])
             pos += 4
 
@@ -729,11 +721,12 @@ def unwrap_rtx(rtx: RtpPacket, payload_type: int, ssrc: int) -> RtpPacket:
     packet = RtpPacket(
         payload_type=payload_type,
         marker=rtx.marker,
-        sequence_number=unpack("!H", rtx.payload[0:2])[0],
+        sequence_number=unpack("!H", rtx.payload[:2])[0],
         timestamp=rtx.timestamp,
         ssrc=ssrc,
         payload=rtx.payload[2:],
     )
+
     packet.csrc = rtx.csrc
     packet.extensions = rtx.extensions
     return packet

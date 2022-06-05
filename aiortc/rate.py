@@ -253,9 +253,8 @@ class InterArrival:
     def new_timestamp_group(self, timestamp: int, arrival_time: int) -> bool:
         if self.belongs_to_burst(timestamp, arrival_time):
             return False
-        else:
-            timestamp_delta = uint32_add(timestamp, -self.current_group.first_timestamp)
-            return timestamp_delta > self.group_length
+        timestamp_delta = uint32_add(timestamp, -self.current_group.first_timestamp)
+        return timestamp_delta > self.group_length
 
     def packet_out_of_order(self, timestamp: int) -> bool:
         timestamp_delta = uint32_add(timestamp, -self.current_group.first_timestamp)
@@ -430,18 +429,14 @@ class OveruseEstimator:
         return min_frame_period
 
     def update_noise_estimate(self, residual: float, ts_delta: float) -> None:
-        alpha = 0.01
-        if self._num_of_deltas > 10 * 30:
-            alpha = 0.002
-
+        alpha = 0.002 if self._num_of_deltas > 10 * 30 else 0.01
         beta = pow(1 - alpha, ts_delta * 30.0 / 1000.0)
         self.avg_noise = beta * self.avg_noise + (1 - beta) * residual
         self.var_noise = (
             beta * self.var_noise + (1 - beta) * (self.avg_noise - residual) ** 2
         )
 
-        if self.var_noise < 1:
-            self.var_noise = 1
+        self.var_noise = max(self.var_noise, 1)
 
 
 class RateBucket:
@@ -486,7 +481,7 @@ class RateCounter:
         return None
 
     def reset(self) -> None:
-        self._buckets = [RateBucket() for i in range(self._window_size)]
+        self._buckets = [RateBucket() for _ in range(self._window_size)]
         self._origin_index = 0
         self._origin_ms = None
         self._total = RateBucket()

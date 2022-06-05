@@ -136,10 +136,7 @@ class Chunk:
 class BaseParamsChunk(Chunk):
     def __init__(self, flags: int = 0, body: Optional[bytes] = None) -> None:
         self.flags = flags
-        if body:
-            self.params = decode_params(body)
-        else:
-            self.params = []
+        self.params = decode_params(body) if body else []
 
     @property
     def body(self) -> bytes:
@@ -305,10 +302,10 @@ class SackChunk(Chunk):
                 nb_duplicates,
             ) = unpack_from("!LLHH", body)
             pos = 12
-            for i in range(nb_gaps):
+            for _ in range(nb_gaps):
                 self.gaps.append(unpack_from("!HH", body, pos))
                 pos += 4
-            for i in range(nb_duplicates):
+            for _ in range(nb_duplicates):
                 self.duplicates.append(unpack_from("!L", body, pos)[0])
                 pos += 4
         else:
@@ -347,10 +344,7 @@ class ShutdownChunk(Chunk):
 
     def __init__(self, flags=0, body=None):
         self.flags = flags
-        if body:
-            self.cumulative_tsn = unpack_from("!L", body)[0]
-        else:
-            self.cumulative_tsn = 0
+        self.cumulative_tsn = unpack_from("!L", body)[0] if body else 0
 
     @property
     def body(self) -> bytes:
@@ -388,7 +382,7 @@ CHUNK_CLASSES = [
     ReconfigChunk,
     ForwardTsnChunk,
 ]
-CHUNK_TYPES = dict((cls.type, cls) for cls in CHUNK_CLASSES)
+CHUNK_TYPES = {cls.type: cls for cls in CHUNK_CLASSES}
 
 
 def parse_packet(data: bytes) -> Tuple[int, int, int, List[Any]]:
@@ -400,7 +394,7 @@ def parse_packet(data: bytes) -> Tuple[int, int, int, List[Any]]:
 
     # verify checksum
     checksum = unpack_from("<L", data, 8)[0]
-    if checksum != crc32(data[0:8] + b"\x00\x00\x00\x00" + data[12:]):
+    if checksum != crc32(data[:8] + b"\x00\x00\x00\x00" + data[12:]):
         raise ValueError("SCTP packet has invalid checksum")
 
     chunks = []
@@ -408,8 +402,7 @@ def parse_packet(data: bytes) -> Tuple[int, int, int, List[Any]]:
     while pos <= length - 4:
         chunk_type, chunk_flags, chunk_length = unpack_from("!BBH", data, pos)
         chunk_body = data[pos + 4 : pos + chunk_length]
-        chunk_cls = CHUNK_TYPES.get(chunk_type)
-        if chunk_cls:
+        if chunk_cls := CHUNK_TYPES.get(chunk_type):
             chunks.append(chunk_cls(flags=chunk_flags, body=chunk_body))
         pos += chunk_length + padl(chunk_length)
     return source_port, destination_port, verification_tag, chunks
@@ -445,9 +438,7 @@ class StreamResetOutgoingParam:
     @classmethod
     def parse(cls, data):
         request_sequence, response_sequence, last_tsn = unpack_from("!LLL", data)
-        streams = []
-        for pos in range(12, len(data), 2):
-            streams.append(unpack_from("!H", data, pos)[0])
+        streams = [unpack_from("!H", data, pos)[0] for pos in range(12, len(data), 2)]
         return cls(
             request_sequence=request_sequence,
             response_sequence=response_sequence,
@@ -462,8 +453,7 @@ class StreamAddOutgoingParam:
     new_streams = attr.ib()
 
     def __bytes__(self) -> bytes:
-        data = pack("!LHH", self.request_sequence, self.new_streams, 0)
-        return data
+        return pack("!LHH", self.request_sequence, self.new_streams, 0)
 
     @classmethod
     def parse(cls, data):
@@ -521,9 +511,8 @@ class InboundStream:
                 if not (chunk.flags & SCTP_DATA_FIRST_FRAG):
                     if ordered:
                         break
-                    else:
-                        pos += 1
-                        continue
+                    pos += 1
+                    continue
                 if ordered and uint16_gt(chunk.stream_seq, self.sequence_number):
                     break
                 expected_tsn = chunk.tsn
@@ -531,10 +520,9 @@ class InboundStream:
             elif chunk.tsn != expected_tsn:
                 if ordered:
                     break
-                else:
-                    start_pos = None
-                    pos += 1
-                    continue
+                start_pos = None
+                pos += 1
+                continue
 
             if chunk.flags & SCTP_DATA_LAST_FRAG:
                 user_data = b"".join(
@@ -711,26 +699,23 @@ class RTCSctpTransport(AsyncIOEventEmitter):
         """
         Start the transport.
         """
-        if not self.__started:
-            self.__started = True
-            self.__state = "connecting"
-            self._remote_port = remotePort
+        if self.__started:
+            return
+        self.__started = True
+        self.__state = "connecting"
+        self._remote_port = remotePort
 
             # configure logging
-            if logger.isEnabledFor(logging.DEBUG):
-                prefix = self.is_server and "server " or "client "
-                self.__log_debug = lambda msg, *args: logger.debug(prefix + msg, *args)
+        if logger.isEnabledFor(logging.DEBUG):
+            prefix = "server " if self.is_server else "client "
+            self.__log_debug = lambda msg, *args: logger.debug(prefix + msg, *args)
 
             # initialise local channel ID counter
             # one side should be using even IDs, the other odd IDs
-            if self.is_server:
-                self._data_channel_id = 0
-            else:
-                self._data_channel_id = 1
-
-            self.__transport._register_data_receiver(self)
-            if not self.is_server:
-                await self._init()
+        self._data_channel_id = 0 if self.is_server else 1
+        self.__transport._register_data_receiver(self)
+        if not self.is_server:
+            await self._init()
 
     async def stop(self) -> None:
         """
@@ -941,11 +926,9 @@ class RTCSctpTransport(AsyncIOEventEmitter):
             and self._association_state == self.State.ESTABLISHED
         ):
             for param in chunk.params:
-                cls = RECONFIG_PARAM_TYPES.get(param[0])
-                if cls:
+                if cls := RECONFIG_PARAM_TYPES.get(param[0]):
                     await self._receive_reconfig_param(cls.parse(param[1]))
 
-        # server
         elif isinstance(chunk, InitChunk) and self.is_server:
             self._last_received_tsn = tsn_minus_one(chunk.initial_tsn)
             self._reconfig_response_seq = tsn_minus_one(chunk.initial_tsn)
@@ -983,7 +966,8 @@ class RTCSctpTransport(AsyncIOEventEmitter):
             cookie = chunk.body
             if (
                 len(cookie) != COOKIE_LENGTH
-                or hmac.new(self._hmac_key, cookie[0:4], "sha1").digest() != cookie[4:]
+                or hmac.new(self._hmac_key, cookie[:4], "sha1").digest()
+                != cookie[4:]
             ):
                 self.__log_debug("x State cookie is invalid")
                 return
@@ -1002,7 +986,6 @@ class RTCSctpTransport(AsyncIOEventEmitter):
             await self._send_chunk(ack)
             self._set_state(self.State.ESTABLISHED)
 
-        # client
         elif (
             isinstance(chunk, InitAckChunk)
             and self._association_state == self.State.COOKIE_WAIT
@@ -1221,9 +1204,7 @@ class RTCSctpTransport(AsyncIOEventEmitter):
             for stream_id in param.streams:
                 self._inbound_streams.pop(stream_id, None)
 
-                # close data channel
-                channel = self._data_channels.get(stream_id)
-                if channel:
+                if channel := self._data_channels.get(stream_id):
                     self._data_channel_close(channel)
 
             # send response
@@ -1269,14 +1250,10 @@ class RTCSctpTransport(AsyncIOEventEmitter):
         """
         Send data ULP -> stream.
         """
-        if ordered:
-            stream_seq = self._outbound_stream_seq.get(stream_id, 0)
-        else:
-            stream_seq = 0
-
+        stream_seq = self._outbound_stream_seq.get(stream_id, 0) if ordered else 0
         fragments = math.ceil(len(user_data) / USERDATA_MAX_LENGTH)
         pos = 0
-        for fragment in range(0, fragments):
+        for fragment in range(fragments):
             chunk = DataChunk()
             chunk.flags = 0
             if not ordered:
@@ -1538,7 +1515,7 @@ class RTCSctpTransport(AsyncIOEventEmitter):
 
     async def _transmit_reconfig(self):
         if self._reconfig_queue and not self._reconfig_request:
-            streams = self._reconfig_queue[0:RECONFIG_MAX_STREAMS]
+            streams = self._reconfig_queue[:RECONFIG_MAX_STREAMS]
             self._reconfig_queue = self._reconfig_queue[RECONFIG_MAX_STREAMS:]
             param = StreamResetOutgoingParam(
                 request_sequence=self._reconfig_request_seq,

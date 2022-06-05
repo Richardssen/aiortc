@@ -340,7 +340,7 @@ class RTCPeerConnectionTest(TestCase):
 
     def assertHasDtls(self, description, setup):
         self.assertTrue("a=fingerprint:sha-256" in description.sdp)
-        self.assertTrue("a=setup:" + setup in description.sdp)
+        self.assertTrue(f"a=setup:{setup}" in description.sdp)
 
     def closeDataChannel(self, dc):
         dc.close()
@@ -2634,7 +2634,7 @@ a=fmtp:98 apt=97
             def on_message(message):
                 pc2_data_messages.append(message)
                 if isinstance(message, str):
-                    channel.send("string-echo: " + message)
+                    channel.send(f"string-echo: {message}")
                 else:
                     channel.send(b"binary-echo: " + message)
 
@@ -2797,7 +2797,7 @@ a=fmtp:98 apt=97
             def on_message(message):
                 pc2_data_messages.append(message)
                 if isinstance(message, str):
-                    channel.send("string-echo: " + message)
+                    channel.send(f"string-echo: {message}")
                 else:
                     channel.send(b"binary-echo: " + message)
 
@@ -2971,7 +2971,7 @@ a=fmtp:98 apt=97
         def on_message2(message):
             pc2_data_messages.append(message)
             if isinstance(message, str):
-                dc2.send("string-echo: " + message)
+                dc2.send(f"string-echo: {message}")
             else:
                 dc2.send(b"binary-echo: " + message)
 
@@ -3142,7 +3142,7 @@ a=fmtp:98 apt=97
             def on_message(message):
                 pc2_data_messages.append(message)
                 if isinstance(message, str):
-                    channel.send("string-echo: " + message)
+                    channel.send(f"string-echo: {message}")
                 else:
                     channel.send(b"binary-echo: " + message)
 
@@ -3365,7 +3365,7 @@ a=fmtp:98 apt=97
             def on_message(message):
                 pc2_data_messages.append(message)
                 if isinstance(message, str):
-                    channel.send("string-echo: " + message)
+                    channel.send(f"string-echo: {message}")
                 else:
                     channel.send(b"binary-echo: " + message)
 
@@ -3533,7 +3533,7 @@ a=fmtp:98 apt=97
             @channel.on("message")
             def on_message(message):
                 pc2_data_messages.append(message)
-                channel.send("string-echo: " + message)
+                channel.send(f"string-echo: {message}")
 
         # create data channel
         dc = pc1.createDataChannel("chat", maxPacketLifeTime=500, protocol="bob")
@@ -3632,7 +3632,7 @@ a=fmtp:98 apt=97
             @channel.on("message")
             def on_message(message):
                 pc2_data_messages.append(message)
-                channel.send("string-echo: " + message)
+                channel.send(f"string-echo: {message}")
 
         # create data channel
         dc = pc1.createDataChannel("chat", maxRetransmits=0, protocol="bob")
@@ -3731,7 +3731,7 @@ a=fmtp:98 apt=97
             @channel.on("message")
             def on_message(message):
                 pc2_data_messages.append(message)
-                channel.send("string-echo: " + message)
+                channel.send(f"string-echo: {message}")
 
         # create data channel
         dc = pc1.createDataChannel("chat", ordered=False, protocol="bob")

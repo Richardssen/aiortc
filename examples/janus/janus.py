@@ -12,7 +12,7 @@ from aiortc.contrib.media import MediaPlayer
 
 
 def transaction_id():
-    return "".join(random.choice(string.ascii_letters) for x in range(12))
+    return "".join(random.choice(string.ascii_letters) for _ in range(12))
 
 
 class JanusPlugin:
@@ -23,7 +23,7 @@ class JanusPlugin:
 
     async def send(self, payload):
         message = {"janus": "message", "transaction": transaction_id()}
-        message.update(payload)
+        message |= payload
         async with self._session._http.post(self._url, json=message) as response:
             data = await response.json()
             assert data["janus"] == "ack"
@@ -47,7 +47,7 @@ class JanusSession:
             data = await response.json()
             assert data["janus"] == "success"
             plugin_id = data["data"]["id"]
-            plugin = JanusPlugin(self, self._session_url + "/" + str(plugin_id))
+            plugin = JanusPlugin(self, f"{self._session_url}/{str(plugin_id)}")
             self._plugins[plugin_id] = plugin
             return plugin
 
@@ -58,7 +58,7 @@ class JanusSession:
             data = await response.json()
             assert data["janus"] == "success"
             session_id = data["data"]["id"]
-            self._session_url = self._root_url + "/" + str(session_id)
+            self._session_url = f"{self._root_url}/{str(session_id)}"
 
         self._poll_task = asyncio.ensure_future(self._poll())
 
@@ -84,8 +84,7 @@ class JanusSession:
             async with self._http.get(self._session_url, params=params) as response:
                 data = await response.json()
                 if data["janus"] == "event":
-                    plugin = self._plugins.get(data["sender"], None)
-                    if plugin:
+                    if plugin := self._plugins.get(data["sender"], None):
                         await plugin._queue.put(data)
                     else:
                         print(data)
@@ -120,8 +119,7 @@ async def run(pc, player, room, session):
 
     # send offer
     await pc.setLocalDescription(await pc.createOffer())
-    request = {"request": "configure"}
-    request.update(media)
+    request = {"request": "configure"} | media
     response = await plugin.send(
         {
             "body": request,
@@ -165,11 +163,7 @@ if __name__ == "__main__":
     pc = RTCPeerConnection()
 
     # create media source
-    if args.play_from:
-        player = MediaPlayer(args.play_from)
-    else:
-        player = None
-
+    player = MediaPlayer(args.play_from) if args.play_from else None
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(

@@ -8,7 +8,7 @@ from aiortc.contrib.signaling import add_signaling_arguments, create_signaling
 
 
 def channel_log(channel, t, message):
-    print("channel(%s) %s %s" % (channel.label, t, message))
+    print(f"channel({channel.label}) {t} {message}")
 
 
 def channel_send(channel, message):
@@ -40,11 +40,10 @@ time_start = None
 def current_stamp():
     global time_start
 
-    if time_start is None:
-        time_start = time.time()
-        return 0
-    else:
+    if time_start is not None:
         return int((time.time() - time_start) * 1000000)
+    time_start = time.time()
+    return 0
 
 
 async def run_answer(pc, signaling):
@@ -60,7 +59,7 @@ async def run_answer(pc, signaling):
 
             if isinstance(message, str) and message.startswith("ping"):
                 # reply
-                channel_send(channel, "pong" + message[4:])
+                channel_send(channel, f"pong{message[4:]}")
 
     await consume_signaling(pc, signaling)
 

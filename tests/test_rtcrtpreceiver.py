@@ -37,17 +37,15 @@ VP8_CODEC = RTCRtpCodecParameters(
 
 
 def create_rtp_packets(count, seq=0):
-    packets = []
-    for i in range(count):
-        packets.append(
-            RtpPacket(
-                payload_type=0,
-                sequence_number=uint16_add(seq, i),
-                ssrc=1234,
-                timestamp=i * 160,
-            )
+    return [
+        RtpPacket(
+            payload_type=0,
+            sequence_number=uint16_add(seq, i),
+            ssrc=1234,
+            timestamp=i * 160,
         )
-    return packets
+        for i in range(count)
+    ]
 
 
 def create_rtp_video_packets(self, codec, frames, seq=0):
@@ -94,7 +92,7 @@ class NackGeneratorTest(TestCase):
             missed = generator.add(packet)
             self.assertEqual(missed, packet.sequence_number == 2)
 
-        self.assertEqual(generator.missing, set([1]))
+        self.assertEqual(generator.missing, {1})
 
         # late arrival
         missed = generator.add(missing)
@@ -111,7 +109,7 @@ class StreamStatisticsTest(TestCase):
         packets = create_rtp_packets(20, 0)
 
         # receive 10 packets
-        for packet in packets[0:10]:
+        for packet in packets[:10]:
             counter.add(packet)
 
         self.assertEqual(counter.max_seq, 9)
@@ -146,7 +144,7 @@ class StreamStatisticsTest(TestCase):
         packets.pop(1)
 
         # receive 9 packets (one missing)
-        for packet in packets[0:9]:
+        for packet in packets[:9]:
             counter.add(packet)
 
         self.assertEqual(counter.max_seq, 9)

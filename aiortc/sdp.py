@@ -69,11 +69,11 @@ def candidate_to_sdp(candidate: RTCIceCandidate) -> str:
     )
 
     if candidate.relatedAddress is not None:
-        sdp += " raddr %s" % candidate.relatedAddress
+        sdp += f" raddr {candidate.relatedAddress}"
     if candidate.relatedPort is not None:
-        sdp += " rport %s" % candidate.relatedPort
+        sdp += f" rport {candidate.relatedPort}"
     if candidate.tcpType is not None:
-        sdp += " tcptype %s" % candidate.tcpType
+        sdp += f" tcptype {candidate.tcpType}"
     return sdp
 
 
@@ -93,7 +93,7 @@ def grouplines(sdp: str) -> Tuple[List[str], List[List[str]]]:
 def ipaddress_from_sdp(sdp: str) -> str:
     m = re.match("^IN (IP4|IP6) ([^ ]+)$", sdp)
     assert m
-    return m.group(2)
+    return m[2]
 
 
 def ipaddress_to_sdp(addr: str) -> str:
@@ -106,10 +106,7 @@ def parameters_from_sdp(sdp: str) -> OrderedDict:
     for param in sdp.split(";"):
         if "=" in param:
             k, v = param.split("=", 1)
-            if k in FMTP_INT_PARAMETERS:
-                parameters[k] = int(v)
-            else:
-                parameters[k] = v
+            parameters[k] = int(v) if k in FMTP_INT_PARAMETERS else v
         else:
             parameters[param] = None
     return parameters
@@ -119,18 +116,17 @@ def parameters_to_sdp(parameters: OrderedDict) -> str:
     params = []
     for param_k, param_v in parameters.items():
         if param_v is not None:
-            params.append("%s=%s" % (param_k, param_v))
+            params.append(f"{param_k}={param_v}")
         else:
             params.append(param_k)
     return ";".join(params)
 
 
 def parse_attr(line: str) -> Tuple[str, Optional[str]]:
-    if ":" in line:
-        bits = line[2:].split(":", 1)
-        return bits[0], bits[1]
-    else:
+    if ":" not in line:
         return line[2:], None
+    bits = line[2:].split(":", 1)
+    return bits[0], bits[1]
 
 
 @attr.s
@@ -139,12 +135,11 @@ class GroupDescription:
     items = attr.ib()  # List[Union[int, str]]
 
     def __str__(self) -> str:
-        return "%s %s" % (self.semantic, " ".join(map(str, self.items)))
+        return f'{self.semantic} {" ".join(map(str, self.items))}'
 
 
 def parse_group(dest: List[GroupDescription], value: str, type=str) -> None:
-    bits = value.split()
-    if bits:
+    if bits := value.split():
         dest.append(GroupDescription(semantic=bits[0], items=list(map(type, bits[1:]))))
 
 
@@ -198,24 +193,33 @@ class MediaDescription:
         self.ice_options = None  # type: Optional[str]
 
     def __str__(self) -> str:
-        lines = []
-        lines.append(
-            "m=%s %d %s %s"
-            % (self.kind, self.port, self.profile, " ".join(map(str, self.fmt)))
-        )
-        if self.host is not None:
-            lines.append("c=%s" % ipaddress_to_sdp(self.host))
-        if self.direction is not None:
-            lines.append("a=" + self.direction)
+        lines = [
+            (
+                "m=%s %d %s %s"
+                % (
+                    self.kind,
+                    self.port,
+                    self.profile,
+                    " ".join(map(str, self.fmt)),
+                )
+            )
+        ]
 
-        for header in self.rtp.headerExtensions:
-            lines.append("a=extmap:%d %s" % (header.id, header.uri))
+        if self.host is not None:
+            lines.append(f"c={ipaddress_to_sdp(self.host)}")
+        if self.direction is not None:
+            lines.append(f"a={self.direction}")
+
+        lines.extend(
+            "a=extmap:%d %s" % (header.id, header.uri)
+            for header in self.rtp.headerExtensions
+        )
 
         if self.rtp.muxId:
-            lines.append("a=mid:" + self.rtp.muxId)
+            lines.append(f"a=mid:{self.rtp.muxId}")
 
         if self.msid:
-            lines.append("a=msid:" + self.msid)
+            lines.append(f"a=msid:{self.msid}")
 
         if self.rtcp_port is not None and self.rtcp_host is not None:
             lines.append(
@@ -224,8 +228,7 @@ class MediaDescription:
             if self.rtcp_mux:
                 lines.append("a=rtcp-mux")
 
-        for group in self.ssrc_group:
-            lines.append("a=ssrc-group:%s" % group)
+        lines.extend(f"a=ssrc-group:{group}" for group in self.ssrc_group)
         for ssrc_info in self.ssrc:
             for ssrc_attr in SSRC_INFO_ATTRS:
                 ssrc_value = getattr(ssrc_info, ssrc_attr)
@@ -241,40 +244,41 @@ class MediaDescription:
             for feedback in codec.rtcpFeedback:
                 value = feedback.type
                 if feedback.parameter:
-                    value += " " + feedback.parameter
+                    value += f" {feedback.parameter}"
                 lines.append("a=rtcp-fb:%d %s" % (codec.payloadType, value))
 
-            # parameters
-            params = parameters_to_sdp(codec.parameters)
-            if params:
+            if params := parameters_to_sdp(codec.parameters):
                 lines.append("a=fmtp:%d %s" % (codec.payloadType, params))
 
-        for k, v in self.sctpmap.items():
-            lines.append("a=sctpmap:%d %s" % (k, v))
+        lines.extend("a=sctpmap:%d %s" % (k, v) for k, v in self.sctpmap.items())
         if self.sctp_port is not None:
             lines.append("a=sctp-port:%d" % self.sctp_port)
         if self.sctpCapabilities is not None:
             lines.append("a=max-message-size:%d" % self.sctpCapabilities.maxMessageSize)
 
         # ice
-        for candidate in self.ice_candidates:
-            lines.append("a=candidate:" + candidate_to_sdp(candidate))
+        lines.extend(
+            f"a=candidate:{candidate_to_sdp(candidate)}"
+            for candidate in self.ice_candidates
+        )
+
         if self.ice_candidates_complete:
             lines.append("a=end-of-candidates")
         if self.ice.usernameFragment is not None:
-            lines.append("a=ice-ufrag:" + self.ice.usernameFragment)
+            lines.append(f"a=ice-ufrag:{self.ice.usernameFragment}")
         if self.ice.password is not None:
-            lines.append("a=ice-pwd:" + self.ice.password)
+            lines.append(f"a=ice-pwd:{self.ice.password}")
         if self.ice_options is not None:
-            lines.append("a=ice-options:" + self.ice_options)
+            lines.append(f"a=ice-options:{self.ice_options}")
 
         # dtls
         if self.dtls:
-            for fingerprint in self.dtls.fingerprints:
-                lines.append(
-                    "a=fingerprint:%s %s" % (fingerprint.algorithm, fingerprint.value)
-                )
-            lines.append("a=setup:" + DTLS_ROLE_SETUP[self.dtls.role])
+            lines.extend(
+                f"a=fingerprint:{fingerprint.algorithm} {fingerprint.value}"
+                for fingerprint in self.dtls.fingerprints
+            )
+
+            lines.append(f"a=setup:{DTLS_ROLE_SETUP[self.dtls.role]}")
 
         return "\r\n".join(lines) + "\r\n"
 
@@ -462,12 +466,12 @@ class SessionDescription:
         return session
 
     def __str__(self) -> str:
-        lines = ["v=%d" % self.version, "o=%s" % self.origin, "s=%s" % self.name]
+        lines = ["v=%d" % self.version, f"o={self.origin}", f"s={self.name}"]
         if self.host is not None:
-            lines += ["c=%s" % ipaddress_to_sdp(self.host)]
-        lines += ["t=%s" % self.time]
+            lines += [f"c={ipaddress_to_sdp(self.host)}"]
+        lines += [f"t={self.time}"]
         for group in self.group:
-            lines += ["a=group:%s" % group]
+            lines += [f"a=group:{group}"]
         for group in self.msid_semantic:
-            lines += ["a=msid-semantic:%s" % group]
+            lines += [f"a=msid-semantic:{group}"]
         return "\r\n".join(lines) + "\r\n" + "".join([str(m) for m in self.media])

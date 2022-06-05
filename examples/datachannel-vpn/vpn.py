@@ -11,7 +11,7 @@ logger = logging.Logger("vpn")
 
 
 def channel_log(channel, t, message):
-    logger.info("channel(%s) %s %s" % (channel.label, t, repr(message)))
+    logger.info(f"channel({channel.label}) {t} {repr(message)}")
 
 
 async def consume_signaling(pc, signaling):
@@ -40,8 +40,7 @@ def tun_start(tap, channel):
 
     # relay tap -> channel
     def tun_reader():
-        data = tap.fd.read(tap.mtu)
-        if data:
+        if data := tap.fd.read(tap.mtu):
             channel.send(data)
 
     loop = asyncio.get_event_loop()
@@ -89,7 +88,7 @@ if __name__ == "__main__":
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    tap = tuntap.Tun(name="revpn-%s" % args.role)
+    tap = tuntap.Tun(name=f"revpn-{args.role}")
 
     signaling = create_signaling(args)
     pc = RTCPeerConnection()

@@ -57,7 +57,7 @@ def track_channels(transport):
 
 async def wait_for_outcome(client, server):
     final = [RTCSctpTransport.State.ESTABLISHED, RTCSctpTransport.State.CLOSED]
-    for i in range(100):
+    for _ in range(100):
         if client._association_state in final and server._association_state in final:
             break
         await asyncio.sleep(0.1)
@@ -87,13 +87,13 @@ class SctpPacketTest(TestCase):
 
     def test_parse_init_invalid_checksum(self):
         data = load("sctp_init.bin")
-        data = data[0:8] + b"\x01\x02\x03\x04" + data[12:]
+        data = data[:8] + b"\x01\x02\x03\x04" + data[12:]
         with self.assertRaises(ValueError) as cm:
             self.roundtrip_packet(data)
         self.assertEqual(str(cm.exception), "SCTP packet has invalid checksum")
 
     def test_parse_init_truncated_packet_header(self):
-        data = load("sctp_init.bin")[0:10]
+        data = load("sctp_init.bin")[:10]
         with self.assertRaises(ValueError) as cm:
             self.roundtrip_packet(data)
         self.assertEqual(str(cm.exception), "SCTP packet length is less than 12 bytes")
@@ -1440,10 +1440,7 @@ class RTCSctpTransportTest(TestCase):
     def test_stale_cookie(self):
         def mock_timestamp():
             mock_timestamp.calls += 1
-            if mock_timestamp.calls == 1:
-                return 0
-            else:
-                return 61
+            return 0 if mock_timestamp.calls == 1 else 61
 
         mock_timestamp.calls = 0
 
@@ -1492,14 +1489,10 @@ class RTCSctpTransportTest(TestCase):
         client = RTCSctpTransport(self.client_transport)
         client._last_received_tsn = 0
 
-        # build chunks
-        chunks = []
-
         chunk = DataChunk(flags=SCTP_DATA_FIRST_FRAG)
         chunk.user_data = b"foo"
         chunk.tsn = 1
-        chunks.append(chunk)
-
+        chunks = [chunk]
         chunk = DataChunk()
         chunk.user_data = b"bar"
         chunk.tsn = 2
@@ -1522,7 +1515,7 @@ class RTCSctpTransportTest(TestCase):
         run(client._receive_chunk(chunks[2]))
         self.assertEqual(client._sack_needed, True)
         self.assertEqual(client._sack_duplicates, [])
-        self.assertEqual(client._sack_misordered, set([3]))
+        self.assertEqual(client._sack_misordered, {3})
         self.assertEqual(client._last_received_tsn, 1)
         client._sack_needed = False
 
@@ -1676,22 +1669,22 @@ class RTCSctpTransportTest(TestCase):
         # receive 3
         self.assertFalse(client._mark_received(3))
         self.assertEqual(client._last_received_tsn, 1)
-        self.assertEqual(client._sack_misordered, set([3]))
+        self.assertEqual(client._sack_misordered, {3})
 
         # receive 4
         self.assertFalse(client._mark_received(4))
         self.assertEqual(client._last_received_tsn, 1)
-        self.assertEqual(client._sack_misordered, set([3, 4]))
+        self.assertEqual(client._sack_misordered, {3, 4})
 
         # receive 6
         self.assertFalse(client._mark_received(6))
         self.assertEqual(client._last_received_tsn, 1)
-        self.assertEqual(client._sack_misordered, set([3, 4, 6]))
+        self.assertEqual(client._sack_misordered, {3, 4, 6})
 
         # receive 2
         self.assertFalse(client._mark_received(2))
         self.assertEqual(client._last_received_tsn, 4)
-        self.assertEqual(client._sack_misordered, set([6]))
+        self.assertEqual(client._sack_misordered, {6})
 
     def test_send_sack(self):
         sack = None

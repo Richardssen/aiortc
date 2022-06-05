@@ -120,9 +120,7 @@ def find_common_header_extensions(
 ) -> List[RTCRtpHeaderExtensionParameters]:
     common = []
     for rx in remote_extensions:
-        for lx in local_extensions:
-            if lx.uri == rx.uri:
-                common.append(rx)
+        common.extend(rx for lx in local_extensions if lx.uri == rx.uri)
     return common
 
 
@@ -144,10 +142,7 @@ def add_transport_description(
 
     # dtls
     media.dtls = dtlsTransport.getLocalParameters()
-    if iceTransport.role == "controlling":
-        media.dtls.role = "auto"
-    else:
-        media.dtls.role = "client"
+    media.dtls.role = "auto" if iceTransport.role == "controlling" else "client"
 
 
 def add_remote_candidates(
@@ -208,7 +203,7 @@ def create_media_description_for_transceiver(
         fmt=[c.payloadType for c in transceiver._codecs],
     )
     media.direction = direction
-    media.msid = "%s %s" % (transceiver.sender._stream_id, transceiver.sender._track_id)
+    media.msid = f"{transceiver.sender._stream_id} {transceiver.sender._track_id}"
 
     media.rtp = RTCRtpParameters(
         codecs=transceiver._codecs,
@@ -378,13 +373,12 @@ class RTCPeerConnection(AsyncIOEventEmitter):
         self.__assertTrackHasNoSender(track)
 
         for transceiver in self.__transceivers:
-            if transceiver.kind == track.kind:
-                if transceiver.sender.track is None:
-                    transceiver.sender.replaceTrack(track)
-                    transceiver.direction = or_direction(
-                        transceiver.direction, "sendonly"
-                    )
-                    return transceiver.sender
+            if transceiver.kind == track.kind and transceiver.sender.track is None:
+                transceiver.sender.replaceTrack(track)
+                transceiver.direction = or_direction(
+                    transceiver.direction, "sendonly"
+                )
+                return transceiver.sender
 
         transceiver = self.__createTransceiver(
             direction="sendrecv", kind=track.kind, sender_track=track
@@ -824,11 +818,15 @@ class RTCPeerConnection(AsyncIOEventEmitter):
         if bundle and bundle.items:
             # find main media stream
             masterMid = bundle.items[0]
-            masterTransport = None
-            for transceiver in self.__transceivers:
-                if transceiver.mid == masterMid:
-                    masterTransport = transceiver._transport
-                    break
+            masterTransport = next(
+                (
+                    transceiver._transport
+                    for transceiver in self.__transceivers
+                    if transceiver.mid == masterMid
+                ),
+                None,
+            )
+
             if self.__sctp and self.__sctp.mid == masterMid:
                 masterTransport = self.__sctp.transport
 
@@ -1024,7 +1022,7 @@ class RTCPeerConnection(AsyncIOEventEmitter):
             state = "closed"
         elif "failed" in states:
             state = "failed"
-        elif states == set(["completed"]):
+        elif states == {"completed"}:
             state = "completed"
         elif "checking" in states:
             state = "checking"
@@ -1039,7 +1037,7 @@ class RTCPeerConnection(AsyncIOEventEmitter):
     def __updateIceGatheringState(self) -> None:
         # compute new state
         states = set(map(lambda x: x.iceGatherer.state, self.__iceTransports))
-        if states == set(["completed"]):
+        if states == {"completed"}:
             state = "complete"
         elif "gathering" in states:
             state = "gathering"
@@ -1055,39 +1053,46 @@ class RTCPeerConnection(AsyncIOEventEmitter):
         self, description: sdp.SessionDescription, is_local: bool
     ) -> None:
         # check description is compatible with signaling state
-        if is_local:
-            if description.type == "offer":
-                if self.signalingState not in ["stable", "have-local-offer"]:
-                    raise InvalidStateError(
-                        'Cannot handle offer in signaling state "%s"'
-                        % self.signalingState
-                    )
-            elif description.type == "answer":
-                if self.signalingState not in [
+        if (
+            is_local
+            and description.type == "offer"
+            and self.signalingState not in ["stable", "have-local-offer"]
+            or not is_local
+            and description.type == "offer"
+            and self.signalingState not in ["stable", "have-remote-offer"]
+        ):
+            raise InvalidStateError(
+                'Cannot handle offer in signaling state "%s"'
+                % self.signalingState
+            )
+        elif (
+            (not is_local or description.type != "offer")
+            and (
+                not is_local
+                or description.type != "answer"
+                or self.signalingState
+                not in [
                     "have-remote-offer",
                     "have-local-pranswer",
-                ]:
-                    raise InvalidStateError(
-                        'Cannot handle answer in signaling state "%s"'
-                        % self.signalingState
-                    )
-        else:
-            if description.type == "offer":
-                if self.signalingState not in ["stable", "have-remote-offer"]:
-                    raise InvalidStateError(
-                        'Cannot handle offer in signaling state "%s"'
-                        % self.signalingState
-                    )
-            elif description.type == "answer":
-                if self.signalingState not in [
+                ]
+            )
+            and (not is_local or description.type == "answer")
+            and (is_local or description.type != "offer")
+            and (
+                is_local
+                or description.type != "answer"
+                or self.signalingState
+                not in [
                     "have-local-offer",
                     "have-remote-pranswer",
-                ]:
-                    raise InvalidStateError(
-                        'Cannot handle answer in signaling state "%s"'
-                        % self.signalingState
-                    )
-
+                ]
+            )
+            and (is_local or description.type == "answer")
+        ):
+            raise InvalidStateError(
+                'Cannot handle answer in signaling state "%s"'
+                % self.signalingState
+            )
         for media in description.media:
             # check ICE credentials were provided
             if not media.ice.usernameFragment or not media.ice.password:
