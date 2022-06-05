@@ -33,7 +33,7 @@ async def offer(request):
 
     @pc.on("iceconnectionstatechange")
     async def on_iceconnectionstatechange():
-        print("ICE connection state is %s" % pc.iceConnectionState)
+        print(f"ICE connection state is {pc.iceConnectionState}")
         if pc.iceConnectionState == "failed":
             await pc.close()
             pcs.discard(pc)

@@ -92,7 +92,7 @@ class VpxPayloadDescriptor:
 
     @classmethod
     def parse(cls: Type[DESCRIPTOR_T], data: bytes) -> Tuple[DESCRIPTOR_T, bytes]:
-        if len(data) < 1:
+        if not data:
             raise ValueError("VPX descriptor is too short")
 
         # first byte
@@ -214,7 +214,7 @@ class Vp8Decoder(Decoder):
                     o_pos = 0
 
                     div = p and 2 or 1
-                    for r in range(0, img.d_h // div):
+                    for _ in range(img.d_h // div):
                         o_buf[o_pos : o_pos + o_stride] = i_buf[
                             i_pos : i_pos + o_stride
                         ]
@@ -339,7 +339,7 @@ class Vp8Encoder(Encoder):
                 # resize buffer if needed
                 if length + pkt.data.frame.sz > len(self.buffer):
                     new_buffer = bytearray(length + pkt.data.frame.sz)
-                    new_buffer[0:length] = self.buffer[0:length]
+                    new_buffer[0:length] = self.buffer[:length]
                     self.buffer = new_buffer
 
                 # append new data

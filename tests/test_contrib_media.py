@@ -116,7 +116,7 @@ class MediaPlayerTest(MediaTestCase):
 
         # read all frames
         self.assertEqual(player.audio.readyState, "live")
-        for i in range(49):
+        for _ in range(49):
             frame = run(player.audio.recv())
             self.assertEqual(frame.format.name, "s16")
             self.assertEqual(frame.layout.name, "stereo")
@@ -140,7 +140,7 @@ class MediaPlayerTest(MediaTestCase):
 
         # read all frames
         self.assertEqual(player.audio.readyState, "live")
-        for i in range(50):
+        for _ in range(50):
             frame = run(player.audio.recv())
             self.assertEqual(frame.format.name, "s16")
             self.assertEqual(frame.layout.name, "stereo")
@@ -160,7 +160,7 @@ class MediaPlayerTest(MediaTestCase):
 
         # read all frames
         self.assertEqual(player.video.readyState, "live")
-        for i in range(90):
+        for _ in range(90):
             frame = run(player.video.recv())
             self.assertEqual(frame.width, 640)
             self.assertEqual(frame.height, 480)
@@ -178,7 +178,7 @@ class MediaPlayerTest(MediaTestCase):
 
         # read all frames
         self.assertEqual(player.video.readyState, "live")
-        for i in range(90):
+        for _ in range(90):
             frame = run(player.video.recv())
             self.assertEqual(frame.width, 640)
             self.assertEqual(frame.height, 480)

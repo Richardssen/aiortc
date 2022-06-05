@@ -57,7 +57,7 @@ async def run(pc, player, recorder, signaling):
 
     @pc.on("track")
     def on_track(track):
-        print("Track %s received" % track.kind)
+        print(f"Track {track.kind} received")
         recorder.addTrack(track)
 
     # connect to websocket and join
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if not args.room:
-        args.room = "".join([random.choice("0123456789") for x in range(10)])
+        args.room = "".join([random.choice("0123456789") for _ in range(10)])
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
@@ -108,11 +108,7 @@ if __name__ == "__main__":
     pc = RTCPeerConnection()
 
     # create media source
-    if args.play_from:
-        player = MediaPlayer(args.play_from)
-    else:
-        player = None
-
+    player = MediaPlayer(args.play_from) if args.play_from else None
     # create media sink
     if args.record_to:
         recorder = MediaRecorder(args.record_to)

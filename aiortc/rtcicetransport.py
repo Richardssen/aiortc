@@ -93,11 +93,7 @@ def connection_kwargs(servers: List[RTCIceServer]) -> Dict[str, Any]:
     kwargs = {}  # type: Dict[str, Any]
 
     for server in servers:
-        if isinstance(server.urls, list):
-            uris = server.urls
-        else:
-            uris = [server.urls]
-
+        uris = server.urls if isinstance(server.urls, list) else [server.urls]
         for uri in uris:
             parsed = parse_stun_turn_uri(uri)
 
@@ -257,10 +253,7 @@ class RTCIceTransport(AsyncIOEventEmitter):
 
         Either `'controlling'` or `'controlled'`.
         """
-        if self._connection.ice_controlling:
-            return "controlling"
-        else:
-            return "controlled"
+        return "controlling" if self._connection.ice_controlling else "controlled"
 
     @property
     def state(self) -> str:
@@ -341,7 +334,7 @@ class RTCIceTransport(AsyncIOEventEmitter):
             raise
 
     def __log_debug(self, msg: str, *args) -> None:
-        logger.debug(self.role + " " + msg, *args)
+        logger.debug(f"{self.role} {msg}", *args)
 
     def __setState(self, state: str) -> None:
         if state != self.__state:

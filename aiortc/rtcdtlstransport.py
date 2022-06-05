@@ -197,12 +197,7 @@ class RTCCertificate:
         return cls(key=key, cert=cert)
 
     def _create_ssl_context(self) -> Any:
-        if hasattr(lib, "DTLS_method"):
-            # openssl >= 1.0.2
-            method = lib.DTLS_method
-        else:
-            # openssl < 1.0.2
-            method = lib.DTLSv1_method
+        method = lib.DTLS_method if hasattr(lib, "DTLS_method") else lib.DTLSv1_method
         ctx = lib.SSL_CTX_new(method())
         ctx = ffi.gc(ctx, lib.SSL_CTX_free)
 
@@ -364,7 +359,7 @@ class RTCDtlsTransport(AsyncIOEventEmitter):
         self._rtp_header_extensions_map = rtp.HeaderExtensionsMap()
         self._rtp_router = RtpRouter()
         self._state = State.NEW
-        self._stats_id = "transport_" + str(id(self))
+        self._stats_id = f"transport_{id(self)}"
         self._task = None  # type: Optional[asyncio.Future[None]]
         self._transport = transport
 
@@ -462,14 +457,14 @@ class RTCDtlsTransport(AsyncIOEventEmitter):
         # check remote fingerprint
         x509 = lib.SSL_get_peer_certificate(self.ssl)
         remote_fingerprint = certificate_digest(x509)
-        fingerprint_is_valid = False
-        for f in remoteParameters.fingerprints:
-            if (
+        fingerprint_is_valid = any(
+            (
                 f.algorithm.lower() == "sha-256"
                 and f.value.lower() == remote_fingerprint.lower()
-            ):
-                fingerprint_is_valid = True
-                break
+            )
+            for f in remoteParameters.fingerprints
+        )
+
         if not fingerprint_is_valid:
             self.__log_debug("x DTLS handshake failed (fingerprint mismatch)")
             self._set_state(State.FAILED)
@@ -615,7 +610,7 @@ class RTCDtlsTransport(AsyncIOEventEmitter):
                 self.__log_debug("- DTLS shutdown by remote party")
                 raise ConnectionError
             elif result > 0 and self._data_receiver:
-                data = ffi.buffer(self.read_cdata)[0:result]
+                data = ffi.buffer(self.read_cdata)[:result]
                 await self._data_receiver._handle_data(data)
         elif first_byte > 127 and first_byte < 192 and self._rx_srtp:
             # SRTP / SRTCP
@@ -637,10 +632,7 @@ class RTCDtlsTransport(AsyncIOEventEmitter):
     def _register_rtp_receiver(
         self, receiver, parameters: RTCRtpReceiveParameters
     ) -> None:
-        ssrcs = set()
-        for encoding in parameters.encodings:
-            ssrcs.add(encoding.ssrc)
-
+        ssrcs = {encoding.ssrc for encoding in parameters.encodings}
         self._rtp_header_extensions_map.configure(parameters)
         self._rtp_router.register_receiver(
             receiver,
@@ -697,12 +689,12 @@ class RTCDtlsTransport(AsyncIOEventEmitter):
             result = lib.BIO_read(
                 self.write_bio, self.write_cdata, len(self.write_cdata)
             )
-            await self.transport._send(ffi.buffer(self.write_cdata)[0:result])
+            await self.transport._send(ffi.buffer(self.write_cdata)[:result])
             self.__tx_bytes += result
             self.__tx_packets += 1
 
     def __log_debug(self, msg: str, *args) -> None:
-        logger.debug(self._role + " " + msg, *args)
+        logger.debug(f"{self._role} {msg}", *args)
 
     def __log_warning(self, msg: str, *args) -> None:
-        logger.warning(self._role + " " + msg, *args)
+        logger.warning(f"{self._role} {msg}", *args)

@@ -73,12 +73,12 @@ class RTCDataChannel(AsyncIOEventEmitter):
                 "if data channel is negotiated out-of-band"
             )
 
-        if not self.__parameters.negotiated:
-            if self.__send_open:
-                self.__send_open = False
-                self.__transport._data_channel_open(self)
-        else:
+        if self.__parameters.negotiated:
             self.__transport._data_channel_add_negotiated(self)
+
+        elif self.__send_open:
+            self.__send_open = False
+            self.__transport._data_channel_open(self)
 
     @property
     def bufferedAmount(self) -> int:
@@ -181,7 +181,7 @@ class RTCDataChannel(AsyncIOEventEmitter):
             raise InvalidStateError
 
         if not isinstance(data, (str, bytes)):
-            raise ValueError("Cannot send unsupported data type: %s" % type(data))
+            raise ValueError(f"Cannot send unsupported data type: {type(data)}")
 
         self.transport._data_channel_send(self, data)
 
@@ -212,4 +212,4 @@ class RTCDataChannel(AsyncIOEventEmitter):
                 self.remove_all_listeners()
 
     def __log_debug(self, msg: str, *args) -> None:
-        logger.debug(str(self.id) + " " + msg, *args)
+        logger.debug(f"{str(self.id)} {msg}", *args)

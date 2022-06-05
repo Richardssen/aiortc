@@ -70,7 +70,7 @@ class RtcpPacketTest(TestCase):
         self.assertEqual(repr(packet), "RtcpByePacket(sources=[])")
 
     def test_bye_only_padding_zero(self):
-        data = load("rtcp_bye_padding.bin")[0:4] + b"\x00\x00\x00\x00"
+        data = load("rtcp_bye_padding.bin")[:4] + b"\x00\x00\x00\x00"
 
         with self.assertRaises(ValueError) as cm:
             RtcpPacket.parse(data)
@@ -127,14 +127,14 @@ class RtcpPacketTest(TestCase):
 
         for length in range(1, 4):
             with self.assertRaises(ValueError) as cm:
-                RtcpPacket.parse(data[0:length])
+                RtcpPacket.parse(data[:length])
             self.assertEqual(
                 str(cm.exception), "RTCP packet length is less than 4 bytes"
             )
 
         for length in range(4, 32):
             with self.assertRaises(ValueError) as cm:
-                RtcpPacket.parse(data[0:length])
+                RtcpPacket.parse(data[:length])
             self.assertEqual(str(cm.exception), "RTCP packet is truncated")
 
     def test_sdes(self):
@@ -278,7 +278,7 @@ class RtpPacketTest(TestCase):
 
         serialized = packet.serialize()
         self.assertEqual(len(serialized), len(data))
-        self.assertEqual(serialized[0:12], data[0:12])
+        self.assertEqual(serialized[:12], data[:12])
         self.assertEqual(serialized[-1], data[-1])
 
     def test_padding_only_with_header_extensions(self):
@@ -310,17 +310,17 @@ class RtpPacketTest(TestCase):
 
         serialized = packet.serialize(extensions_map)
         self.assertEqual(len(serialized), len(data))
-        self.assertEqual(serialized[0:20], data[0:20])
+        self.assertEqual(serialized[:20], data[:20])
         self.assertEqual(serialized[-1], data[-1])
 
     def test_padding_too_long(self):
-        data = load("rtp_only_padding.bin")[0:12] + b"\x02"
+        data = load("rtp_only_padding.bin")[:12] + b"\x02"
         with self.assertRaises(ValueError) as cm:
             RtpPacket.parse(data)
         self.assertEqual(str(cm.exception), "RTP packet padding length is invalid")
 
     def test_padding_zero(self):
-        data = load("rtp_only_padding.bin")[0:12] + b"\x00"
+        data = load("rtp_only_padding.bin")[:12] + b"\x00"
         with self.assertRaises(ValueError) as cm:
             RtpPacket.parse(data)
         self.assertEqual(str(cm.exception), "RTP packet padding length is invalid")
@@ -342,7 +342,7 @@ class RtpPacketTest(TestCase):
         data = load("rtp_with_csrc.bin")
         for length in range(12, 20):
             with self.assertRaises(ValueError) as cm:
-                RtpPacket.parse(data[0:length])
+                RtpPacket.parse(data[:length])
             self.assertEqual(str(cm.exception), "RTP packet has truncated CSRC")
 
     def test_with_sdes_mid(self):
@@ -374,20 +374,20 @@ class RtpPacketTest(TestCase):
 
         for length in range(12, 16):
             with self.assertRaises(ValueError) as cm:
-                RtpPacket.parse(data[0:length])
+                RtpPacket.parse(data[:length])
             self.assertEqual(
                 str(cm.exception), "RTP packet has truncated extension profile / length"
             )
 
         for length in range(16, 20):
             with self.assertRaises(ValueError) as cm:
-                RtpPacket.parse(data[0:length])
+                RtpPacket.parse(data[:length])
             self.assertEqual(
                 str(cm.exception), "RTP packet has truncated extension value"
             )
 
     def test_truncated(self):
-        data = load("rtp.bin")[0:11]
+        data = load("rtp.bin")[:11]
         with self.assertRaises(ValueError) as cm:
             RtpPacket.parse(data)
         self.assertEqual(str(cm.exception), "RTP packet length is less than 12 bytes")

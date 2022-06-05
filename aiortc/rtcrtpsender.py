@@ -112,7 +112,7 @@ class RTCRtpSender:
         return self.__transport
 
     @classmethod
-    def getCapabilities(self, kind):
+    def getCapabilities(cls, kind):
         """
         Returns the most optimistic view of the system's capabilities for
         sending media of the given `kind`.
@@ -129,31 +129,25 @@ class RTCRtpSender:
         """
         self.__stats.add(
             RTCOutboundRtpStreamStats(
-                # RTCStats
                 timestamp=clock.current_datetime(),
                 type="outbound-rtp",
-                id="outbound-rtp_" + str(id(self)),
-                # RTCStreamStats
+                id=f"outbound-rtp_{id(self)}",
                 ssrc=self._ssrc,
                 kind=self.__kind,
                 transportId=self.transport._stats_id,
-                # RTCSentRtpStreamStats
                 packetsSent=self.__packet_count,
                 bytesSent=self.__octet_count,
-                # RTCOutboundRtpStreamStats
-                trackId=str(id(self.track)),
+                trackId=id(self.track),
             )
         )
+
         self.__stats.update(self.transport._get_stats())
 
         return self.__stats
 
     def replaceTrack(self, track: Optional[MediaStreamTrack]) -> None:
         self.__track = track
-        if track is not None:
-            self._track_id = track.id
-        else:
-            self._track_id = str(uuid.uuid4())
+        self._track_id = track.id if track is not None else str(uuid.uuid4())
 
     def setTransport(self, transport) -> None:
         self.__transport = transport
@@ -164,26 +158,27 @@ class RTCRtpSender:
 
         :param parameters: The :class:`RTCRtpSendParameters` for the sender.
         """
-        if not self.__started:
-            self.__cname = parameters.rtcp.cname
-            self.__mid = parameters.muxId
+        if self.__started:
+            return
+        self.__cname = parameters.rtcp.cname
+        self.__mid = parameters.muxId
 
-            # make note of the RTP header extension IDs
-            self.__transport._register_rtp_sender(self, parameters)
-            self.__rtp_header_extensions_map.configure(parameters)
+        # make note of the RTP header extension IDs
+        self.__transport._register_rtp_sender(self, parameters)
+        self.__rtp_header_extensions_map.configure(parameters)
 
-            # make note of RTX payload type
-            for codec in parameters.codecs:
-                if (
-                    is_rtx(codec)
-                    and codec.parameters["apt"] == parameters.codecs[0].payloadType
-                ):
-                    self.__rtx_payload_type = codec.payloadType
-                    break
+        # make note of RTX payload type
+        for codec in parameters.codecs:
+            if (
+                is_rtx(codec)
+                and codec.parameters["apt"] == parameters.codecs[0].payloadType
+            ):
+                self.__rtx_payload_type = codec.payloadType
+                break
 
-            self.__rtp_task = asyncio.ensure_future(self._run_rtp(parameters.codecs[0]))
-            self.__rtcp_task = asyncio.ensure_future(self._run_rtcp())
-            self.__started = True
+        self.__rtp_task = asyncio.ensure_future(self._run_rtp(parameters.codecs[0]))
+        self.__rtcp_task = asyncio.ensure_future(self._run_rtcp())
+        self.__started = True
 
     async def stop(self):
         """
@@ -208,23 +203,20 @@ class RTCRtpSender:
 
                 self.__stats.add(
                     RTCRemoteInboundRtpStreamStats(
-                        # RTCStats
                         timestamp=clock.current_datetime(),
                         type="remote-inbound-rtp",
-                        id="remote-inbound-rtp_" + str(id(self)),
-                        # RTCStreamStats
+                        id=f"remote-inbound-rtp_{id(self)}",
                         ssrc=packet.ssrc,
                         kind=self.__kind,
                         transportId=self.transport._stats_id,
-                        # RTCReceivedRtpStreamStats
                         packetsReceived=self.__packet_count - report.packets_lost,
                         packetsLost=report.packets_lost,
                         jitter=report.jitter,
-                        # RTCRemoteInboundRtpStreamStats
                         roundTripTime=self.__rtt,
                         fractionLost=report.fraction_lost,
                     )
                 )
+
         elif isinstance(packet, RtcpRtpfbPacket) and packet.fmt == RTCP_RTPFB_NACK:
             for seq in packet.lost:
                 await self._retransmit(seq)
@@ -392,4 +384,4 @@ class RTCRtpSender:
             pass
 
     def __log_debug(self, msg: str, *args) -> None:
-        logger.debug("sender(%s) " + msg, self.__kind, *args)
+        logger.debug(f"sender(%s) {msg}", self.__kind, *args)

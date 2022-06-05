@@ -127,15 +127,11 @@ def player_worker(
             audio_samples += frame.samples
 
             audio_fifo.write(frame)
-            while True:
-                frame = audio_fifo.read(audio_samples_per_frame)
-                if frame:
-                    frame_time = frame.time
-                    asyncio.run_coroutine_threadsafe(
-                        audio_track._queue.put(frame), loop
-                    )
-                else:
-                    break
+            while frame := audio_fifo.read(audio_samples_per_frame):
+                frame_time = frame.time
+                asyncio.run_coroutine_threadsafe(
+                    audio_track._queue.put(frame), loop
+                )
         elif isinstance(frame, VideoFrame) and video_track:
             if frame.pts is None:  # pragma: no cover
                 logger.warning("Skipping video frame with no pts")
@@ -286,7 +282,7 @@ class MediaPlayer:
             self.__container = None
 
     def __log_debug(self, msg, *args):
-        logger.debug("player(%s) " + msg, self.__container.name, *args)
+        logger.debug(f"player(%s) {msg}", self.__container.name, *args)
 
 
 class MediaRecorderContext:
@@ -325,20 +321,19 @@ class MediaRecorder:
         :param track: A :class:`aiortc.MediaStreamTrack`.
         """
         if track.kind == "audio":
-            if self.__container.format.name == "wav":
-                codec_name = "pcm_s16le"
-            elif self.__container.format.name == "mp3":
+            if self.__container.format.name == "mp3":
                 codec_name = "mp3"
+            elif self.__container.format.name == "wav":
+                codec_name = "pcm_s16le"
             else:
                 codec_name = "aac"
             stream = self.__container.add_stream(codec_name)
+        elif self.__container.format.name == "image2":
+            stream = self.__container.add_stream("png", rate=30)
+            stream.pix_fmt = "rgb24"
         else:
-            if self.__container.format.name == "image2":
-                stream = self.__container.add_stream("png", rate=30)
-                stream.pix_fmt = "rgb24"
-            else:
-                stream = self.__container.add_stream("libx264", rate=30)
-                stream.pix_fmt = "yuv420p"
+            stream = self.__container.add_stream("libx264", rate=30)
+            stream.pix_fmt = "yuv420p"
         self.__tracks[track] = MediaRecorderContext(stream)
 
     async def start(self):
@@ -362,9 +357,9 @@ class MediaRecorder:
                         self.__container.mux(packet)
             self.__tracks = {}
 
-            if self.__container:
-                self.__container.close()
-                self.__container = None
+        if self.__container:
+            self.__container.close()
+            self.__container = None
 
     async def __run_track(self, track, context):
         while True:

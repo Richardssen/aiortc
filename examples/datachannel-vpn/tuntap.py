@@ -48,8 +48,7 @@ class Tun:
     def ifflags(self):
         # Get existing device flags
         ifreq = struct.pack("16sh", self.name, 0)
-        flags = struct.unpack("16sh", fcntl.ioctl(self.sockfd, SIOCGIFFLAGS, ifreq))[1]
-        return flags
+        return struct.unpack("16sh", fcntl.ioctl(self.sockfd, SIOCGIFFLAGS, ifreq))[1]
 
     @ifflags.setter
     def ifflags(self, flags):
@@ -76,10 +75,7 @@ class Tun:
     def is_up(self):
         """ Return True if the interface is up, False otherwise. """
 
-        if self.ifflags & IFF_UP:
-            return True
-        else:
-            return False
+        return bool(self.ifflags & IFF_UP)
 
     def open(self):
         """ Open file corresponding to the TUN device. """

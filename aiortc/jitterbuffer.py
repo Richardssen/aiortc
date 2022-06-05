@@ -16,9 +16,7 @@ class JitterBuffer:
         assert capacity & (capacity - 1) == 0, "capacity must be a power of 2"
         self._capacity = capacity
         self._origin = None  # type: Optional[int]
-        self._packets = [
-            None for i in range(capacity)
-        ]  # type: List[Optional[RtpPacket]]
+        self._packets = [None for _ in range(capacity)]
         self._prefetch = prefetch
 
     @property
@@ -88,7 +86,7 @@ class JitterBuffer:
 
     def remove(self, count: int) -> None:
         assert count <= self._capacity
-        for i in range(count):
+        for _ in range(count):
             pos = self._origin % self._capacity
             self._packets[pos] = None
             self._origin += 1

@@ -40,7 +40,7 @@ class H264PayloadDescriptor:
         self.first_fragment = first_fragment
 
     def __repr__(self):
-        return "H264PayloadDescriptor(FF={})".format(self.first_fragment)
+        return f"H264PayloadDescriptor(FF={self.first_fragment})"
 
     @classmethod
     def parse(cls: Type[DESCRIPTOR_T], data: bytes) -> Tuple[DESCRIPTOR_T, bytes]:
@@ -108,7 +108,7 @@ class H264Decoder(Decoder):
             packet.time_base = VIDEO_TIME_BASE
             frames = self.codec.decode(packet)
         except av.AVError as e:
-            logger.warning("failed to decode, skipping package: " + str(e))
+            logger.warning(f"failed to decode, skipping package: {str(e)}")
             return []
 
         return frames
@@ -186,10 +186,7 @@ class H264Encoder(Encoder):
         except StopIteration:
             nalu = None
 
-        if counter <= 1:
-            return data, nalu
-        else:
-            return bytes([stap_header]) + payload, nalu
+        return (data, nalu) if counter <= 1 else (bytes([stap_header]) + payload, nalu)
 
     @staticmethod
     def _split_bitstream(buf: bytes) -> Iterator[bytes]:
@@ -214,11 +211,9 @@ class H264Encoder(Encoder):
                 # FIXME: the next line fails when reading a nal that ends
                 # exactly at the end of the data
                 if i + 3 >= len(buf):
-                    nal_end = len(buf)
-                    yield buf[nal_start:nal_end]
+                    yield buf[nal_start:]
                     return  # did not find nal end, stream ended first
-            nal_end = i
-            yield buf[nal_start:nal_end]
+            yield buf[nal_start:i]
 
     @classmethod
     def _packetize(cls, packages: Iterator[bytes]) -> List[bytes]:
